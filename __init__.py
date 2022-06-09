@@ -1,4 +1,4 @@
-from .engine import megaXkey, keyboardKeys, mouseButtons
+from .engine import xyZkey, keyboardKeys, mouseButtons, KeyCode
 
 
-print("loaded megaXkey")
+print("loaded xyZkey")

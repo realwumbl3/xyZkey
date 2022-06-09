@@ -19,7 +19,7 @@ from pynput import keyboard
 from pynput.keyboard import Controller as keyboardController
 from pynput.mouse import Controller as mouseController
 
-from pynput.keyboard import Key as keyboardKeys
+from pynput.keyboard import Key as keyboardKeys, KeyCode
 from pynput.mouse import Button as mouseButtons
 
 
@@ -55,7 +55,7 @@ class mouseGesture:
         self.callback = callback
 
 
-class megaXkey(Thread):
+class xyZkey(Thread):
     def __init__(self):
         Thread.__init__(self)
         self.threads = []
@@ -223,7 +223,7 @@ class megaXkey(Thread):
 
     def DisplayLoop(self):
         os.system("cls")
-        print("megaXkey v1.0 - wumbl3.xyz")
+        print("xyZkey v1.0 - wumbl3.xyz")
         print(
             "Combo set:",
             list(self.keyBoardThread.combo_set),
@@ -237,9 +237,9 @@ class megaXkey(Thread):
 
 
 class mouseListenerThread(Thread):
-    def __init__(self, megaXengine):
+    def __init__(self, xyZkey_engine):
         Thread.__init__(self)
-        self.megaXengine = megaXengine
+        self.xyZkey_engine = xyZkey_engine
         self.set = set([])
         self.x = 0
         self.y = 0
@@ -268,7 +268,7 @@ class mouseListenerThread(Thread):
         self.set.clear()
 
     def onMouseMove(self, x, y):
-        if self.megaXengine.xKeyDown:
+        if self.xyZkey_engine.xKeyDown:
             if not self.active:
                 self.active = True
                 self.x, self.y = x, y
@@ -288,13 +288,13 @@ class mouseListenerThread(Thread):
             triggered = "down"
         if triggered:
             self.x, self.y = x, y
-            self.megaXengine.execMoveTick(triggered)
+            self.xyZkey_engine.execMoveTick(triggered)
 
 
 class keyboardListenerThread(Thread):
-    def __init__(self, megaXengine):
+    def __init__(self, xyZkey_engine):
         Thread.__init__(self)
-        self.megaXengine = megaXengine
+        self.xyZkey_engine = xyZkey_engine
         self.supressed = False
         self.combo_set = set([])
 
@@ -322,7 +322,7 @@ class keyboardListenerThread(Thread):
         if state != None:
             self.supressed = state
         self.listener._suppress = self.supressed
-        # self.megaXengine.consolelog("self.supressed state", self.supressed)
+        # self.xyZkey_engine.consolelog("self.supressed state", self.supressed)
 
     def runUnsuppressed(self, func):
         self.setSuppress(False)
@@ -346,18 +346,18 @@ class keyboardListenerThread(Thread):
                 if (
                     difference < 0.25 and difference > 0.08
                 ):  # IF LESS THAN 250MS BUT MORE THAN 80MS (hold)
-                    self.megaXengine.execDoublePress(key)  # EXECUTE REPEAT
+                    self.xyZkey_engine.execDoublePress(key)  # EXECUTE REPEAT
                     return True
         self.histo.append([key, key_press_time])
 
         # MODIFIER STUFFS
-        if self.megaXengine.xKeyDown == None:  # IF NO MOD KEY PRESSED YET
-            if self.megaXengine.get_xKey(key):
+        if self.xyZkey_engine.xKeyDown == None:  # IF NO MOD KEY PRESSED YET
+            if self.xyZkey_engine.get_xKey(key):
                 self.setSuppress(True)
                 return True
         else:  # A MOD KEY IS DOWN
             self.setSuppress(True)
-            self.megaXengine.execModifier(key)
+            self.xyZkey_engine.execModifier(key)
             return True
 
         self.comboCheck(key)
@@ -367,21 +367,21 @@ class keyboardListenerThread(Thread):
             self.rollover.remove(key)
 
         # print("release", key)
-        if self.megaXengine.xKeyDown == None:
+        if self.xyZkey_engine.xKeyDown == None:
             self.setSuppress(False)
-        elif key == self.megaXengine.xKeyDown.key:
-            self.megaXengine.set_xKey(None)
+        elif key == self.xyZkey_engine.xKeyDown.key:
+            self.xyZkey_engine.set_xKey(None)
             self.setSuppress(False)
 
         if key in self.combo_set:
             self.combo_set.remove(key)
 
     def comboCheck(self, key):
-        if not any(combo_obj.keyInCombo(key) for combo_obj in self.megaXengine.keyCombos):
+        if not any(combo_obj.keyInCombo(key) for combo_obj in self.xyZkey_engine.keyCombos):
             return False
 
         self.combo_set.add(key)
 
-        for binded_combo_obj in self.megaXengine.keyCombos:
+        for binded_combo_obj in self.xyZkey_engine.keyCombos:
             if binded_combo_obj.keyMatchAll(self.combo_set):
-                return self.megaXengine.execCombo(binded_combo_obj)
+                return self.xyZkey_engine.execCombo(binded_combo_obj)
