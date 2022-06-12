@@ -1,4 +1,3 @@
-from .engine import xyZkey, keyboardKeys, mouseButtons, KeyCode
-
+from .engine import xyZkey, keyboardKeys, KeyCode
 
 print("loaded xyZkey")

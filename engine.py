@@ -22,6 +22,8 @@ from pynput.mouse import Controller as mouseController
 from pynput.keyboard import Key as keyboardKeys, KeyCode
 from pynput.mouse import Button as mouseButtons
 
+from mouse import hook as mouseHook, ButtonEvent, MoveEvent
+
 
 class xKey:
     def __init__(self, name, key):
@@ -49,9 +51,7 @@ class modifierCombo:
 
 
 class mouseGesture:
-    def __init__(self, modifier_key, direction, callback):
-        self.modifier_key = modifier_key
-        self.direction = direction
+    def __init__(self, callback):
         self.callback = callback
 
 
@@ -60,8 +60,15 @@ class xyZkey(Thread):
         Thread.__init__(self)
         self.threads = []
 
+        self.onMove = None
+        self.onTick = None
+        self.onModifierRelease = None
+        self.onModifierPress = None
+
         self.xKeyDown = None
         self.xKeyKeys = []
+
+        self.simKey = lambda x: self.xKeyKeyboard.simUnsuppressed(x)
 
         self.mouseGestures = {}
         self.modifierCombos = []
@@ -89,16 +96,17 @@ class xyZkey(Thread):
         if key in self.doublePressBinds:
             self.doublePressBinds[key]()
 
-    def execMoveTick(self, tick_dir):
+    def execMoveTick(self, tick):
         # self.consolelog(tick_dir, self.xKeyDown)
+        print("exec tick", tick)
+
         if self.xKeyDown.key not in self.mouseGestures:
             return False
 
-        modifier_mouse_gestures = self.mouseGestures[self.xKeyDown.key]
+        modifier_mouseGestures = self.mouseGestures[self.xKeyDown.key]
 
-        for gesture in modifier_mouse_gestures:
-            if tick_dir == gesture.direction:
-                gesture.callback()
+        if tick in modifier_mouseGestures.keys():
+            modifier_mouseGestures[tick].callback()
 
     ############################## BINDING ##############################
 
@@ -113,20 +121,26 @@ class xyZkey(Thread):
 
         return decorator
 
-    def funcBind(self, event_type, **binded_args):
-        if "func" not in binded_args:
-            self.consolelog("General binding error", "func must be provided.")
+    def funcBind(self, bind_type, **binded_args):
 
-        if event_type == "doubleTap":
+        if "func" not in binded_args:
+            self.consolelog("function must be provided")
+
+        func = binded_args["func"]
+
+        if bind_type in vars(self):
+            setattr(self, bind_type, func)
+
+        if bind_type == "doubleTap":
 
             if "key" in binded_args:
                 key = binded_args["key"]
             else:
                 self.consolelog("doubleTap binding error", "modifier_key must be provided.")
 
-            self.doublePressBinds[key] = binded_args["func"]
+            self.doublePressBinds[key] = func
 
-        if event_type == "modifier":
+        if bind_type == "modifier":
 
             if "modifier_key" in binded_args:
                 modifier_key = binded_args["modifier_key"]
@@ -141,11 +155,11 @@ class xyZkey(Thread):
                 modifierCombo(
                     modifier_key=modifier_key,
                     key=key,
-                    callback=binded_args["func"],
+                    callback=func,
                 )
             )
 
-        if event_type == "combo":
+        if bind_type == "combo":
 
             if "combo" in binded_args:
                 combo = binded_args["combo"]
@@ -155,11 +169,11 @@ class xyZkey(Thread):
             self.keyCombos.append(
                 keyboardCombo(
                     combo=combo,
-                    callback=binded_args["func"],
+                    callback=func,
                 )
             )
 
-        if event_type == "gesture":
+        if bind_type == "gesture":
 
             if "modifier_key" in binded_args:
                 modifier_key = binded_args["modifier_key"]
@@ -171,13 +185,10 @@ class xyZkey(Thread):
                 self.consolelog("Gesture binding error", "gesture direction must be provided.")
 
             if modifier_key not in self.mouseGestures:
-                self.mouseGestures[modifier_key] = []
-            self.mouseGestures[modifier_key].append(
-                mouseGesture(
-                    modifier_key=modifier_key,
-                    direction=direction,
-                    callback=binded_args["func"],
-                )
+                self.mouseGestures[modifier_key] = {}
+
+            self.mouseGestures[modifier_key][direction] = mouseGesture(
+                callback=func,
             )
 
     def consolelog(self, *log):
@@ -195,6 +206,12 @@ class xyZkey(Thread):
         return False
 
     def set_xKey(self, key):
+        if key == None:
+            if self.onModifierRelease:
+                self.onModifierRelease()
+            self.xKeyMouse.ticks.reset()
+        if key != None and self.onModifierPress:
+            self.onModifierPress()
         self.xKeyDown = key
 
     def default_gestures(self):
@@ -209,15 +226,19 @@ class xyZkey(Thread):
 
     def run(self):
         # MOUSE
-        self.mouseThread = mouseListenerThread(self)
+        self.xKeyMouse = mouseListenerThread(self)
         # KEYBOARD
-        self.keyBoardThread = keyboardListenerThread(self)
-        self.threads.append(self.mouseThread)
-        self.threads.append(self.keyBoardThread)
+        self.xKeyKeyboard = keyboardListenerThread(self)
+        self.threads.append(self.xKeyMouse)
+        self.threads.append(self.xKeyKeyboard)
 
         for thread in self.threads:
             thread.start()
-            # thread.join()
+
+    def __kill__(self):
+        self.xKeyMouse.join()
+        self.xKeyKeyboard.__kill__()
+        print("killed xyzKey.")
 
     ######################## DEBUG ########################
 
@@ -226,14 +247,43 @@ class xyZkey(Thread):
         print("xyZkey v1.0 - wumbl3.xyz")
         print(
             "Combo set:",
-            list(self.keyBoardThread.combo_set),
+            list(self.xKeyKeyboard.combo_set),
         )
         print(
             "Keyboard Supressing inputs:",
-            self.keyBoardThread.listener._suppress,
+            self.xKeyKeyboard.listener._suppress,
         )
         for log_item in list(self.console_history):
             print(log_item)
+
+
+class ticks:
+    def __init__(self):
+        self.ticks = {"up": 0, "right": 0, "down": 0, "left": 0}
+
+    def reset(self):
+        for val in self.ticks.keys():
+            self.ticks[val] = 0
+
+    def check(self):
+        for key, val in self.ticks.items():
+            if val >= 4:
+                self.reset()
+                return key
+
+    def incr(self, key):
+        self.ticks[key] += 1
+
+
+class position:
+    def __init__(self):
+        self.x = 0
+        self.y = 0
+        self.set = False
+
+    def set_pos(self, x, y):
+        self.x, self.y = x, y
+        self.set = True
 
 
 class mouseListenerThread(Thread):
@@ -241,54 +291,62 @@ class mouseListenerThread(Thread):
         Thread.__init__(self)
         self.xyZkey_engine = xyZkey_engine
         self.set = set([])
-        self.x = 0
-        self.y = 0
+        self.position = position()
+        self.ticks = ticks()
+
         self.active = False
-        self.tick_dist = 200
+        self.tick_dist = 30
 
     def run(self):
-        self.listener = mouse.Listener(
-            # on_click=self.onMouseEvent,
-            on_move=self.onMouseMove,
-        )
-        with self.listener as listener:
-            listener.join()
+        self.hook = mouseHook(self.onMouseEvent)
 
-    def onMouseEvent(self, x, y, which, hold):
-        if not hold:
-            return self.onMouseRelease(which, x, y)
-        else:
-            return self.onMousePress(which, x, y)
+    def onMouseEvent(self, event):
+        if type(event) == MoveEvent:
+            return self.onMouseMove(event)
+        elif type(event) == ButtonEvent:
+            if event.event_type == "up":
+                return self.onMouseRelease(event)
+            elif event.event_type == "down" or event.event_type == "double":
+                return self.onMousePress(event)
 
-    def onMousePress(self, which, x, y):
-        print("mouse Which", which)
-        self.set.add(which)
+    def onMousePress(self, event):
+        self.set.add(event.button)
 
-    def onMouseRelease(self, which, x, y):
+    def onMouseRelease(self, event):
         self.set.clear()
 
-    def onMouseMove(self, x, y):
+    def onMouseMove(self, event):
+        if self.xyZkey_engine.onMove:
+            self.xyZkey_engine.onMove(event.x, event.y)
+
         if self.xyZkey_engine.xKeyDown:
             if not self.active:
                 self.active = True
-                self.x, self.y = x, y
-            self.onModMouseMove(x, y)
+                self.position.set_pos(event.x, event.y)
+            self.onModMouseMove(event.x, event.y)
         else:
             self.active = False
 
     def onModMouseMove(self, x, y):
-        triggered = None
-        if self.x - x > self.tick_dist:
-            triggered = "left"
-        elif self.x - x < -self.tick_dist:
-            triggered = "right"
-        elif self.y - y > self.tick_dist:
-            triggered = "up"
-        elif self.y - y < -self.tick_dist:
-            triggered = "down"
-        if triggered:
-            self.x, self.y = x, y
-            self.xyZkey_engine.execMoveTick(triggered)
+
+        if self.position.x - x > self.tick_dist:
+            self.ticks.incr("left")
+        elif self.position.x - x < -self.tick_dist:
+            self.ticks.incr("right")
+        elif self.position.y - y > self.tick_dist:
+            self.ticks.incr("up")
+        elif self.position.y - y < -self.tick_dist:
+            self.ticks.incr("down")
+        else:
+            return False
+
+        self.position.set_pos(x, y)
+
+        if self.xyZkey_engine.onTick:
+            self.xyZkey_engine.onTick(self.ticks.ticks)
+
+        if ticked := self.ticks.check():
+            self.xyZkey_engine.execMoveTick(ticked)
 
 
 class keyboardListenerThread(Thread):
@@ -311,7 +369,11 @@ class keyboardListenerThread(Thread):
             suppress=False,
         )
         with self.listener as listener:
+            self._listener = listener
             listener.join()
+
+    def __kill__(self):
+        self._listener.stop()
 
     # SUPRESS
     def win32Filter(self, msg, data):
@@ -322,14 +384,16 @@ class keyboardListenerThread(Thread):
         if state != None:
             self.supressed = state
         self.listener._suppress = self.supressed
-        # self.xyZkey_engine.consolelog("self.supressed state", self.supressed)
 
-    def runUnsuppressed(self, func):
+    def simUnsuppressed(self, key):
+        was_suppressed = bool(self.supressed)
         self.setSuppress(False)
         try:
-            func()
+            self.controller.press(key)
         except Exception as e:
             logging.exception(e)
+        if was_suppressed:
+            self.setSuppress(True)
 
     def keyPress(self, key):
 
@@ -366,7 +430,6 @@ class keyboardListenerThread(Thread):
         if key in self.rollover:
             self.rollover.remove(key)
 
-        # print("release", key)
         if self.xyZkey_engine.xKeyDown == None:
             self.setSuppress(False)
         elif key == self.xyZkey_engine.xKeyDown.key:
