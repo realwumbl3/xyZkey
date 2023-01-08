@@ -4,4 +4,4 @@ electron/node_modules/*
 electron/release-builds/*
 profiles/*
 
-lightSelenium/profiles/*
+seleniumOverlay/*
