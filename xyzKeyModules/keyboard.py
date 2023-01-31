@@ -1,13 +1,11 @@
 from threading import Thread
+import logging
 
 from time import time
 
 from collections import deque
 
-from pynput.keyboard import (
-    Listener as keyboardListener,
-    Controller as keyboardController,
-)
+from pynput.keyboard import Listener as keyboardListener, Controller as keyboardController, Key
 
 
 class keyboardListenerThread(Thread):
@@ -36,20 +34,18 @@ class keyboardListenerThread(Thread):
     def __kill__(self):
         self._listener.stop()
 
-    # SUPRESS
     def win32Filter(self, msg, data):
-        # showWin32Data(data) # SET SUPRESS BASED ON REF VK CODES FROM ADDED MODIFIERS
-        self.setSuppress()
+        vk_code = data.vkCode
+        for xKey in self.xyZkey_engine.xKeyKeys:
+            if vk_code == xKey.vk:
+                self.setSuppress(True)
         return True
 
     def setSuppress(self, state=None):
-        if state != None:
-            self.supressed = state
-        self.listener._suppress = self.supressed
-        return self.supressed
+        self.listener._suppress = state
 
-    def simUnsuppressed(self, key):
-        was_suppressed = bool(self.supressed)
+    def unsuppressed(self, key):
+        was_suppressed = bool(self.listener._suppress)
         self.setSuppress(False)
         try:
             self.controller.press(key)
@@ -80,10 +76,8 @@ class keyboardListenerThread(Thread):
         # MODIFIER STUFFS
         if self.xyZkey_engine.xKeyDown == None:  # IF NO MOD KEY PRESSED YET
             if self.xyZkey_engine.get_xKey(key):
-                self.setSuppress(True)
                 return True
         else:  # A MOD KEY IS DOWN
-            self.setSuppress(True)
             self.xyZkey_engine.execModifier(key)
             return True
 
@@ -92,7 +86,6 @@ class keyboardListenerThread(Thread):
     def keyRelease(self, key):
         if key in self.rollover:
             self.rollover.remove(key)
-        # print("keyup supressed self.listener._suppress:", self.listener._suppress)
 
         if self.xyZkey_engine.xKeyDown == None:
             self.setSuppress(False)

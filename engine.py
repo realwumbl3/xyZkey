@@ -1,4 +1,5 @@
 import logging
+import unicodedata
 
 LOG_FORMAT = "%(filename)s - %(lineno)d - %(levelname)s %(asctime)s - %(message)s"
 logging.basicConfig(filename="log.log", level=logging.INFO, format=LOG_FORMAT, filemode="a+")
@@ -12,11 +13,18 @@ from functools import wraps
 
 from .xyzKeyModules import keyboardListenerThread, mouseListenerThread
 
+from pynput.keyboard import Key, KeyCode
+
 
 class xKey:
     def __init__(self, name, key):
-        self.name = name
-        self.key = key
+        try:
+            self.name = name
+            self.key = key
+            self.vk = key._value_.vk
+        except Exception as e:
+            logging.exception(e)
+            print(e)
 
 
 class mouseGesture:
@@ -56,7 +64,7 @@ class xyZkey(Thread):
         self.xKeyDown = None
         self.xKeyKeys = []
 
-        self.simKey = lambda x: self.xKeyKeyboard.simUnsuppressed(x)
+        self.keyboardPress = lambda x: self.xKeyKeyboard.unsuppressed(x)
 
         self.mouseGestures = {}
         self.modifierCombos = []
@@ -64,6 +72,27 @@ class xyZkey(Thread):
         self.doublePressBinds = {}
 
         self.console_history = deque([], 30)
+
+    def run(self):
+        self.xKeyMouse = mouseListenerThread(self)
+        self.xKeyKeyboard = keyboardListenerThread(self)
+        self.threads.append(self.xKeyMouse)
+        self.threads.append(self.xKeyKeyboard)
+        for thread in self.threads:
+            thread.start()
+
+    def __kill__(self):
+        self.xKeyMouse.join()
+        self.xKeyKeyboard.__kill__()
+        print("killed xyzKey.")
+
+    def DisplayLoop(self):
+        os.system("cls")
+        print("xyZkey v1.0 - wumbl3.xyz")
+        print("Combo set:", list(self.xKeyKeyboard.combo_set))
+        print("Keyboard Supressing inputs:", self.xKeyKeyboard.listener._suppress)
+        for log_item in list(self.console_history):
+            print(log_item)
 
     ############################## EXECS ##############################
 
@@ -176,16 +205,13 @@ class xyZkey(Thread):
 
             self.mouseGestures[modifier_key][direction] = mouseGesture(
                 callback=func,
-                
             )
 
     def consolelog(self, *log):
         self.console_history.appendleft([*log])
 
     def xKeyAdd(self, name, key):
-        self.xKeyKeys.append(
-            xKey(name, key),
-        )
+        self.xKeyKeys.append(xKey(name, key))
 
     def get_xKey(self, key):
         for xKey in self.xKeyKeys:
@@ -201,24 +227,3 @@ class xyZkey(Thread):
         if key != None and self.onModifierPress:
             self.onModifierPress()
         self.xKeyDown = key
-
-    def run(self):
-        self.xKeyMouse = mouseListenerThread(self)
-        self.xKeyKeyboard = keyboardListenerThread(self)
-        self.threads.append(self.xKeyMouse)
-        self.threads.append(self.xKeyKeyboard)
-        for thread in self.threads:
-            thread.start()
-
-    def __kill__(self):
-        self.xKeyMouse.join()
-        self.xKeyKeyboard.__kill__()
-        print("killed xyzKey.")
-
-    def DisplayLoop(self):
-        os.system("cls")
-        print("xyZkey v1.0 - wumbl3.xyz")
-        print("Combo set:", list(self.xKeyKeyboard.combo_set))
-        print("Keyboard Supressing inputs:", self.xKeyKeyboard.listener._suppress)
-        for log_item in list(self.console_history):
-            print(log_item)
