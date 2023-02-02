@@ -21,7 +21,7 @@ class xKey:
         try:
             self.name = name
             self.key = key
-            self.vk = key._value_.vk
+            self.vk = self.key._value_.vk
         except Exception as e:
             logging.exception(e)
             print(e)
@@ -64,7 +64,7 @@ class xyZkey(Thread):
         self.xKeyDown = None
         self.xKeyKeys = []
 
-        self.keyboardPress = lambda x: self.xKeyKeyboard.unsuppressed(x)
+        self.keyboardPress = lambda x: self.xKeyKeyboard.controller.press(x)
 
         self.mouseGestures = {}
         self.modifierCombos = []
