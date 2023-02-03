@@ -16,6 +16,9 @@ from .xyzKeyModules import keyboardListenerThread, mouseListenerThread
 from pynput.keyboard import Key, KeyCode
 
 
+from threading import Timer
+
+
 class xKey:
     def __init__(self, name, key):
         try:
@@ -28,8 +31,22 @@ class xKey:
 
 
 class mouseGesture:
-    def __init__(self, callback):
-        self.callback = callback
+    def __init__(self, callback, cooldown=None):
+        self.cb = callback
+        self.cooldown = cooldown
+        self.paused = False
+
+    def unpause(self):
+        self.paused = False
+
+    def callback(self):
+        if self.paused:
+            return False
+        if self.cooldown:
+            self.paused = True
+            Timer(self.cooldown, self.unpause).start()
+
+        self.cb()
 
 
 class keyboardCombo:
@@ -64,7 +81,7 @@ class xyZkey(Thread):
         self.xKeyDown = None
         self.xKeyKeys = []
 
-        self.keyboardPress = lambda x: self.xKeyKeyboard.controller.press(x)
+        self.keyboardPress = lambda x: self.xKeyKeyboard.unsuppressed(x)
 
         self.mouseGestures = {}
         self.modifierCombos = []
@@ -205,6 +222,7 @@ class xyZkey(Thread):
 
             self.mouseGestures[modifier_key][direction] = mouseGesture(
                 callback=func,
+                cooldown=binded_args.get("cooldown", None),
             )
 
     def consolelog(self, *log):
