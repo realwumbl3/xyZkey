@@ -8,7 +8,7 @@ class taskbarIconThread(Thread):
         Thread.__init__(self)
         self.exit_func = exit_func
 
-        self.engine_path = __file__.split("\\xyzKeyModules\\tasktray.py")[0]
+        self.engine_path = __file__.split("\\modules\\tasktray.py")[0]
 
         self.taskbar_ico = Image.open(f"{self.engine_path}\\icon.ico")
 
@@ -19,6 +19,7 @@ class taskbarIconThread(Thread):
                 pystray.MenuItem("exit", self.exit_app),
             ),
         )
+        self.daemon = True
         self.start()
 
     def exit_app(self, icon, item):

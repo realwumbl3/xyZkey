@@ -1,8 +1,7 @@
-from threading import Thread
-
+from mouse import hook as mouseHook, MoveEvent
+from time import sleep
 from math import hypot, atan2, degrees, floor
-
-from mouse import hook as mouseHook, ButtonEvent, MoveEvent
+from threading import Thread
 
 
 class ticker:
@@ -39,7 +38,16 @@ class ticks:
 
 
 def rotateDegree(initial: int, transform: int) -> int:
-    return (((initial + transform) % 360) + 360) % 360
+    initial += transform
+    if initial > 360:
+        while initial > 360:
+            initial -= 360
+    elif initial < -360:
+        while initial < -360:
+            initial += 360
+    if initial < 0:
+        initial = 360 + initial
+    return initial
 
 
 class mouseListenerThread(Thread):
@@ -49,16 +57,16 @@ class mouseListenerThread(Thread):
         self.set = set([])
 
         self.last_tick = ticker()
-        self.tick_dist = 5
+        self.tick_dist = 20
         self.section_names = [
             "up",
-            # "rightup",
+            "rightup",
             "right",
-            # "rightdown",
+            "rightdown",
             "down",
-            # "leftdown",
+            "leftdown",
             "left",
-            # "leftup",
+            "leftup",
         ]
         self.directions = len(self.section_names)
         self.ticks = ticks(self.section_names)
@@ -106,12 +114,31 @@ class mouseListenerThread(Thread):
             which_section = 0
         self.ticks.incr(self.sectionNames(which_section))
         if self.xyZkey_engine.onTick:
-            self.xyZkey_engine.onTick(
-                {
-                    "ticks": self.ticks.ticks,
-                    "degree": corrected_degrees,
-                    "which": which_section,
-                }
-            )
+            self.xyZkey_engine.onTick(self.ticks.ticks)
         if ticked := self.ticks.check():
             self.xyZkey_engine.execMoveTick(ticked)
+
+
+class dummyEngine:
+    def __init__(self):
+        self.xKeyDown = True
+
+    def execMoveTick(self, ticked):
+        # pass
+        print("ticked", ticked)
+
+    def onTick(self, tick):
+        # pass
+        print("onTick", tick)
+
+    def onMove(self, x, y):
+        pass
+        # print("onMove", x, y)
+
+
+xyZkey_engine = dummyEngine()
+
+mouse_hook = mouseListenerThread(xyZkey_engine).start()
+
+while True:
+    sleep(1)

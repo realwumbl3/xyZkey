@@ -11,7 +11,7 @@ from threading import Thread
 from collections import deque
 from functools import wraps
 
-from .xyzKeyModules import keyboardListenerThread, mouseListenerThread
+from .modules import keyboardListenerThread, mouseListenerThread
 
 from pynput.keyboard import Key, KeyCode
 
@@ -45,8 +45,11 @@ class mouseGesture:
         if self.cooldown:
             self.paused = True
             Timer(self.cooldown, self.unpause).start()
-
-        self.cb()
+        try:
+            self.cb()
+        except Exception as e:
+            logging.exception(e)
+            print(e)
 
 
 class keyboardCombo:
@@ -66,6 +69,16 @@ class modifierCombo:
         self.modifier_key = modifier_key
         self.key = key
         self.callback = callback
+
+
+"""
+TODO:
+
+Implement rollover bool.
+No overlay bool.
+
+
+"""
 
 
 class xyZkey(Thread):
@@ -101,6 +114,7 @@ class xyZkey(Thread):
     def __kill__(self):
         self.xKeyMouse.join()
         self.xKeyKeyboard.__kill__()
+        self.xKeyKeyboard.join()
         print("killed xyzKey.")
 
     def DisplayLoop(self):
@@ -199,12 +213,7 @@ class xyZkey(Thread):
             else:
                 self.consolelog("Combo binding error", "combo must be provided.")
 
-            self.keyCombos.append(
-                keyboardCombo(
-                    combo=combo,
-                    callback=func,
-                )
-            )
+            self.keyCombos.append(keyboardCombo(combo=combo, callback=func))
 
         if bind_type == "gesture":
 
@@ -237,11 +246,17 @@ class xyZkey(Thread):
                 self.set_xKey(xKey)
         return False
 
+    def reset_gestures(self):
+        for modifier_key in self.mouseGestures:
+            for direction in self.mouseGestures[modifier_key]:
+                self.mouseGestures[modifier_key][direction].unpause()
+
     def set_xKey(self, key):
         if key == None:
             if self.onModifierRelease:
                 self.onModifierRelease()
             self.xKeyMouse.ticks.reset()
+            self.reset_gestures()
         if key != None and self.onModifierPress:
             self.onModifierPress()
         self.xKeyDown = key
